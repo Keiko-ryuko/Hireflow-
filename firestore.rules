@@ -1,0 +1,156 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: organizations
+    // Fields:
+    //   - name: string (required)
+    //   - createdAt: timestamp (required)
+    //
+    // Collection: users
+    // Fields:
+    //   - email: string (required)
+    //   - displayName: string (optional)
+    //   - role: string (required, ['admin', 'hr_manager', 'recruiter', 'interviewer', 'viewer'])
+    //   - organizationId: string (required)
+    //
+    // Collection: jobs
+    // Fields:
+    //   - title: string (required)
+    //   - description: string (optional)
+    //   - requirements: string (optional)
+    //   - status: string (required, ['draft', 'published', 'closed'])
+    //   - organizationId: string (required)
+    //   - createdAt: timestamp (required)
+    //
+    // Collection: candidates
+    // Fields:
+    //   - name: string (required)
+    //   - email: string (required)
+    //   - resumeUrl: string (optional)
+    //   - resumeText: string (optional)
+    //   - jobId: string (required)
+    //   - stage: string (required, ['applied', 'screening', 'interview', 'offer', 'hired', 'rejected'])
+    //   - aiScore: number (optional)
+    //   - aiRecommendation: string (optional)
+    //   - organizationId: string (required)
+    //   - createdAt: timestamp (required)
+    //
+    // Collection: interviews
+    // Fields:
+    //   - candidateId: string (required)
+    //   - jobId: string (required)
+    //   - interviewerIds: list (required)
+    //   - startTime: timestamp (required)
+    //   - endTime: timestamp (required)
+    //   - status: string (required, ['scheduled', 'completed', 'cancelled'])
+    //   - feedback: string (optional)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+          (request.auth.token.email == "motanatswa591@gmail.com" && request.auth.token.email_verified == true));
+    }
+
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function isSameOrg(orgId) {
+      return isAuthenticated() && getUserData().organizationId == orgId;
+    }
+
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+
+    function isValidUser(data) {
+      return data.email is string && isValidEmail(data.email) &&
+             data.role in ['admin', 'hr_manager', 'recruiter', 'interviewer', 'viewer'] &&
+             data.organizationId is string;
+    }
+
+    function isValidJob(data) {
+      return data.title is string && data.title.size() > 0 &&
+             data.status in ['draft', 'published', 'closed'] &&
+             data.organizationId is string;
+    }
+
+    function isValidCandidate(data) {
+      return data.name is string && data.name.size() > 0 &&
+             data.email is string && isValidEmail(data.email) &&
+             data.jobId is string &&
+             data.stage in ['applied', 'screening', 'interview', 'offer', 'hired', 'rejected'] &&
+             data.organizationId is string;
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /organizations/{orgId} {
+      allow read: if isAuthenticated() && isSameOrg(orgId);
+      allow create: if isAuthenticated() && isAdmin();
+      allow update: if isAuthenticated() && isAdmin() && isSameOrg(orgId);
+    }
+
+    match /users/{userId} {
+      allow read: if isAuthenticated() && (isOwner(userId) || isSameOrg(resource.data.organizationId));
+      allow create: if isAuthenticated() && isValidUser(request.resource.data) && (isOwner(userId) || isAdmin());
+      allow update: if isAuthenticated() && isValidUser(request.resource.data) && (isOwner(userId) || isAdmin()) && 
+                    (request.resource.data.role == resource.data.role || isAdmin());
+    }
+
+    match /jobs/{jobId} {
+      allow read: if isAuthenticated() && isSameOrg(resource.data.organizationId);
+      allow create: if isAuthenticated() && isValidJob(request.resource.data) && isSameOrg(request.resource.data.organizationId);
+      allow update: if isAuthenticated() && isValidJob(request.resource.data) && isSameOrg(resource.data.organizationId);
+      allow delete: if isAuthenticated() && isAdmin() && isSameOrg(resource.data.organizationId);
+    }
+
+    match /candidates/{candidateId} {
+      allow read: if isAuthenticated() && isSameOrg(resource.data.organizationId);
+      allow create: if isAuthenticated() && isValidCandidate(request.resource.data) && isSameOrg(request.resource.data.organizationId);
+      allow update: if isAuthenticated() && isValidCandidate(request.resource.data) && isSameOrg(resource.data.organizationId);
+      allow delete: if isAuthenticated() && isAdmin() && isSameOrg(resource.data.organizationId);
+    }
+
+    match /interviews/{interviewId} {
+      allow read: if isAuthenticated() && isSameOrg(get(/databases/$(database)/documents/candidates/$(resource.data.candidateId)).data.organizationId);
+      allow create: if isAuthenticated() && isSameOrg(get(/databases/$(database)/documents/candidates/$(request.resource.data.candidateId)).data.organizationId);
+      allow update: if isAuthenticated() && isSameOrg(get(/databases/$(database)/documents/candidates/$(resource.data.candidateId)).data.organizationId);
+      allow delete: if isAuthenticated() && isAdmin();
+    }
+
+    // Default deny
+    match /{path=**} {
+      allow read, write: if false;
+    }
+  }
+}

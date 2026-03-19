@@ -1,0 +1,80 @@
+{
+  "entities": {
+    "organization": {
+      "title": "Organization",
+      "description": "A company using the HireFlow platform.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "Company name" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name"]
+    },
+    "user": {
+      "title": "User",
+      "description": "A recruiter or HR staff member.",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string", "format": "email" },
+        "displayName": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "hr_manager", "recruiter", "interviewer", "viewer"] },
+        "organizationId": { "type": "string" }
+      },
+      "required": ["email", "role", "organizationId"]
+    },
+    "job": {
+      "title": "Job",
+      "description": "A job posting.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "requirements": { "type": "string" },
+        "status": { "type": "string", "enum": ["draft", "published", "closed"] },
+        "organizationId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "status", "organizationId"]
+    },
+    "candidate": {
+      "title": "Candidate",
+      "description": "An applicant for a job.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "resumeUrl": { "type": "string" },
+        "resumeText": { "type": "string" },
+        "jobId": { "type": "string" },
+        "stage": { "type": "string", "enum": ["applied", "screening", "interview", "offer", "hired", "rejected"] },
+        "aiScore": { "type": "number" },
+        "aiRecommendation": { "type": "string" },
+        "organizationId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "email", "jobId", "stage", "organizationId"]
+    },
+    "interview": {
+      "title": "Interview",
+      "description": "A scheduled interview.",
+      "type": "object",
+      "properties": {
+        "candidateId": { "type": "string" },
+        "jobId": { "type": "string" },
+        "interviewerIds": { "type": "array", "items": { "type": "string" } },
+        "startTime": { "type": "string", "format": "date-time" },
+        "endTime": { "type": "string", "format": "date-time" },
+        "status": { "type": "string", "enum": ["scheduled", "completed", "cancelled"] },
+        "feedback": { "type": "string" }
+      },
+      "required": ["candidateId", "jobId", "startTime", "endTime", "status"]
+    }
+  },
+  "firestore": {
+    "/organizations/{orgId}": { "schema": "organization", "description": "Organizations" },
+    "/users/{userId}": { "schema": "user", "description": "Users" },
+    "/jobs/{jobId}": { "schema": "job", "description": "Jobs" },
+    "/candidates/{candidateId}": { "schema": "candidate", "description": "Candidates" },
+    "/interviews/{interviewId}": { "schema": "interview", "description": "Interviews" }
+  }
+}
